@@ -1,5 +1,5 @@
 ####
-#### Logistic reservoir, prediction
+#### Single oscillator reservoir, prediction
 ####
 
 # Load modules
@@ -7,6 +7,9 @@ import numpy as np
 import pandas as pd
 import time
 from scipy import linalg
+import colorednoise as cn
+
+noise = -2 # Adding noise: 0->White; 1->Pink; 2->Brown; -1->Blue; -2->Violet
 
 class Reservoir(): #=========================================================================#
     # Step 1: Initialize class "RandomReservoir"
@@ -46,7 +49,7 @@ class Reservoir(): #============================================================
     
     # Step 4: Compute reservoir states
     def compute_reservoir_state(self, epsilon = 0.0667, q = 0.0008, gamma = 0.0000889, f = 0.65, alfa = 270, beta = 430, 
-                                initial_state = [0, 3.287, 0.006225, 0.4, 0.4]):
+                                initial_state = [0.0, 0.0, 0.0, 0.0, 0.0]):
         start_time_training = time.time()
         self.epsilon, self.q, self.gamma, self.f, self.alfa, self.beta = epsilon, q, gamma, f, alfa, beta
         record_reservoir_train_nrow = int(self.train_data.shape[0] + 1) # size of the training data
@@ -57,13 +60,14 @@ class Reservoir(): #============================================================
         
         # Calculate the next state
         for data_i, input_train in enumerate(self.train_data):
+            y = cn.powerlaw_psd_gaussian(noise, 5) 
             x0, y0, z0, a0, b0 = self.record_reservoir_nodes[data_i,:]
             # BZ reaction
-            x1 = 0.001*(self.q/self.epsilon * a0 * y0 - 1/self.epsilon * x0 * y0 + 1/self.epsilon * a0 * x0 - 1/self.epsilon * x0 * x0)
-            y1 = 0.001*(-self.q/self.gamma * a0 * y0 - 1/self.gamma * x0 * y0 + self.f/self.gamma * b0 * z0)
-            z1 = 0.001*(a0 * x0 - b0 * z0)
-            a1 = 0.001*(-self.q/self.alfa * a0 * y0 - 1/self.alfa * a0 * x0 + 1/self.alfa * x0 * x0)
-            b1 = 0.001*(-1/self.beta * b0 * z0)
+            x1 = 0.001*(self.q/self.epsilon * a0 * y0 - 1/self.epsilon * x0 * y0 + 1/self.epsilon * a0 * x0 - 1/self.epsilon * x0 * x0 + y[0])
+            y1 = 0.001*(-self.q/self.gamma * a0 * y0 - 1/self.gamma * x0 * y0 + self.f/self.gamma * b0 * z0 + y[1])
+            z1 = 0.001*(a0 * x0 - b0 * z0 + 1000*y[2])
+            a1 = 0.001*(-self.q/self.alfa * a0 * y0 - 1/self.alfa * a0 * x0 + 1/self.alfa * x0 * x0 + y[3])
+            b1 = 0.001*(-1/self.beta * b0 * z0 + y[4])
             # Add input vector
             x_n1 = [input_train] @ self.W_in + [x1, y1, z1, a1, b1]
             self.record_reservoir_nodes[data_i + 1,:] = x_n1
@@ -112,13 +116,14 @@ class Reservoir(): #============================================================
         self.test_reservoir_nodes[0,:] = self.record_reservoir_nodes[-1]
         
         for data_i, input_test in enumerate(self.test_data):
+            y = cn.powerlaw_psd_gaussian(noise, 5)
             x0, y0, z0, a0, b0 = self.test_reservoir_nodes[data_i,:]
            # BZ reaction
-            x1 = 0.001*(self.q/self.epsilon * a0 * y0 - 1/self.epsilon * x0 * y0 + 1/self.epsilon * a0 * x0 - 1/self.epsilon * x0 * x0)
-            y1 = 0.001*(-self.q/self.gamma * a0 * y0 - 1/self.gamma * x0 * y0 + self.f/self.gamma * b0 * z0)
-            z1 = 0.001*(a0 * x0 - b0 * z0)
-            a1 = 0.001*(-self.q/self.alfa * a0 * y0 - 1/self.alfa * a0 * x0 + 1/self.alfa * x0 * x0)
-            b1 = 0.001*(-1/self.beta * b0 * z0)
+            x1 = 0.001*(self.q/self.epsilon * a0 * y0 - 1/self.epsilon * x0 * y0 + 1/self.epsilon * a0 * x0 - 1/self.epsilon * x0 * x0 + y[0])
+            y1 = 0.001*(-self.q/self.gamma * a0 * y0 - 1/self.gamma * x0 * y0 + self.f/self.gamma * b0 * z0 + y[1])
+            z1 = 0.001*(a0 * x0 - b0 * z0 + + y[2])
+            a1 = 0.001*(-self.q/self.alfa * a0 * y0 - 1/self.alfa * a0 * x0 + 1/self.alfa * x0 * x0 + y[3])
+            b1 = 0.001*(-1/self.beta * b0 * z0 + y[4])
             # Add input vector
             x_n1 = [input_test] @ self.W_in + [x1, y1, z1, a1, b1]
             self.test_reservoir_nodes[data_i + 1,:] = x_n1
@@ -143,7 +148,8 @@ class Reservoir(): #============================================================
         result_summary = np.array([self.network, round(self.train_pred, 4), round(self.test_pred, 4),
                                  round(self.train_rmse, 4), round(self.test_rmse, 9),
                                  round(self.train_nmse, 7), round(self.test_nmse, 7),
-                                 round(self.epsilon, 3), round(self.q, 3), round(self.gamma, 3), round(self.f, 3), round(self.alfa, 3), round(self.beta, 3),
+                                 round(self.epsilon, 3), round(self.q, 3), round(self.gamma, 3), 
+                                 round(self.f, 3), round(self.alfa, 3), round(self.beta, 3),
                                  self.num_reservoir_nodes, self.w_in_strength, self.w_in_sparsity,
                                  self.target_data.shape[0],
                                  self.test_fraction, self.washout,

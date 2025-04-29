@@ -8,6 +8,9 @@ import pandas as pd
 import time
 from scipy import linalg
 import math
+import colorednoise as cn
+
+noise = -2 # Adding noise: 0->White; 1->Pink; 2->Brown; -1->Blue; -2->Violet
 
 class Reservoir(): #=========================================================================#
     # Step 1: Initialize class "RandomReservoir"
@@ -47,7 +50,7 @@ class Reservoir(): #============================================================
     
     # Step 4: Compute reservoir states
     def compute_reservoir_state(self, epsilon = 0.0667, q = 0.0008, gamma = 0.0000889, f = 0.65, alfa = 270, beta = 430, betap = 412.8, kappa = 0.000099, #0.000099 #0.00002475
-                                initial_state = [0, 3.287, 0.006225, 0.4, 0.4, 0, 3.287, 0.006225, 0.4, 0.4]):
+                                initial_state = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]):
         start_time_training = time.time()
         self.epsilon, self.q, self.gamma, self.f, self.alfa, self.beta, self.betap, self.kappa = epsilon, q, gamma, f, alfa, beta, betap, kappa
         record_reservoir_train_nrow = int(self.train_data.shape[0] + 1) # size of the training data
@@ -58,18 +61,19 @@ class Reservoir(): #============================================================
         
         # Calculate the next state
         for data_i, input_train in enumerate(self.train_data):
+            y = cn.powerlaw_psd_gaussian(noise, 10)
             x0, y0, z0, a0, b0, x0p, y0p, z0p, a0p, b0p  = self.record_reservoir_nodes[data_i,:]
             # BZ reaction
-            x1 = 0.001*(self.q/self.epsilon * a0 * y0 - 1/self.epsilon * x0 * y0 + 1/self.epsilon * a0 * x0 - 1/self.epsilon * x0 * x0)
-            y1 = 0.001*(-self.q/self.gamma * a0 * y0 - 1/self.gamma * x0 * y0 + self.f/self.gamma * b0 * z0)
-            z1 = 0.001*(a0 * x0 - b0 * z0 + self.kappa * 1000 * np.log( abs( (1-z0)*z0p/(z0*(1-z0p)) )) )
-            a1 = 0.001*(-self.q/self.alfa * a0 * y0 - 1/self.alfa * a0 * x0 + 1/self.alfa * x0 * x0)
-            b1 = 0.001*(-1/self.beta * b0 * z0)
-            x2 = 0.001*(self.q/self.epsilon * a0p * y0p - 1/self.epsilon * x0p * y0p + 1/self.epsilon * a0p * x0p - 1/self.epsilon * x0p * x0p)
-            y2 = 0.001*(-self.q/self.gamma * a0p * y0p - 1/self.gamma * x0p * y0p + self.f/self.gamma * b0p * z0p)
-            z2 = 0.001*(a0p * x0p - b0p * z0p - self.kappa * 1000 * np.log( abs( (1-z0)*z0p/(z0*(1-z0p)) )) )
-            a2 = 0.001*(-self.q/self.alfa * a0p * y0p - 1/self.alfa * a0p * x0p + 1/self.alfa * x0p * x0p)
-            b2 = 0.001*(-1/self.betap * b0p * z0p)
+            x1 = 0.001*(self.q/self.epsilon * a0 * y0 - 1/self.epsilon * x0 * y0 + 1/self.epsilon * a0 * x0 - 1/self.epsilon * x0 * x0 + y[0])
+            y1 = 0.001*(-self.q/self.gamma * a0 * y0 - 1/self.gamma * x0 * y0 + self.f/self.gamma * b0 * z0 + y[1])
+            z1 = 0.001*(a0 * x0 - b0 * z0 + self.kappa * 1000 * np.log( abs( (1-z0)*z0p/(z0*(1-z0p)) )) + y[2] )
+            a1 = 0.001*(-self.q/self.alfa * a0 * y0 - 1/self.alfa * a0 * x0 + 1/self.alfa * x0 * x0 + y[3])
+            b1 = 0.001*(-1/self.beta * b0 * z0 + y[4])
+            x2 = 0.001*(self.q/self.epsilon * a0p * y0p - 1/self.epsilon * x0p * y0p + 1/self.epsilon * a0p * x0p - 1/self.epsilon * x0p * x0p + y[5])
+            y2 = 0.001*(-self.q/self.gamma * a0p * y0p - 1/self.gamma * x0p * y0p + self.f/self.gamma * b0p * z0p + y[6])
+            z2 = 0.001*(a0p * x0p - b0p * z0p - self.kappa * 1000 * np.log( abs( (1-z0)*z0p/(z0*(1-z0p)) )) + y[7])
+            a2 = 0.001*(-self.q/self.alfa * a0p * y0p - 1/self.alfa * a0p * x0p + 1/self.alfa * x0p * x0p + y[8])
+            b2 = 0.001*(-1/self.betap * b0p * z0p + y[9])
             # Add input vector
             x_n1 = [input_train] @ self.W_in + [x1, y1, z1, a1, b1, x2, y2, z2, a2, b2]
             self.record_reservoir_nodes[data_i + 1,:] = x_n1
@@ -118,18 +122,19 @@ class Reservoir(): #============================================================
         self.test_reservoir_nodes[0,:] = self.record_reservoir_nodes[-1]
         
         for data_i, input_test in enumerate(self.test_data):
+            y = cn.powerlaw_psd_gaussian(noise, 10)
             x0, y0, z0, a0, b0, x0p, y0p, z0p, a0p, b0p = self.test_reservoir_nodes[data_i,:]
            # BZ reaction
-            x1 = 0.001*(self.q/self.epsilon * a0 * y0 - 1/self.epsilon * x0 * y0 + 1/self.epsilon * a0 * x0 - 1/self.epsilon * x0 * x0)
-            y1 = 0.001*(-self.q/self.gamma * a0 * y0 - 1/self.gamma * x0 * y0 + self.f/self.gamma * b0 * z0)
-            z1 = 0.001*(a0 * x0 - b0 * z0 + self.kappa * 1000 * np.log( abs( (1-z0)*z0p/(z0*(1-z0p)) )) )
-            a1 = 0.001*(-self.q/self.alfa * a0 * y0 - 1/self.alfa * a0 * x0 + 1/self.alfa * x0 * x0)
-            b1 = 0.001*(-1/self.beta * b0 * z0)
-            x2 = 0.001*(self.q/self.epsilon * a0p * y0p - 1/self.epsilon * x0p * y0p + 1/self.epsilon * a0p * x0p - 1/self.epsilon * x0p * x0p)
-            y2 = 0.001*(-self.q/self.gamma * a0p * y0p - 1/self.gamma * x0p * y0p + self.f/self.gamma * b0p * z0p)
-            z2 = 0.001*(a0p * x0p - b0p * z0p - self.kappa * 1000 * np.log( abs( (1-z0)*z0p/(z0*(1-z0p)) )) )
-            a2 = 0.001*(-self.q/self.alfa * a0p * y0p - 1/self.alfa * a0p * x0p + 1/self.alfa * x0p * x0p)
-            b2 = 0.001*(-1/self.betap * b0p * z0p)
+            x1 = 0.001*(self.q/self.epsilon * a0 * y0 - 1/self.epsilon * x0 * y0 + 1/self.epsilon * a0 * x0 - 1/self.epsilon * x0 * x0 + y[0])
+            y1 = 0.001*(-self.q/self.gamma * a0 * y0 - 1/self.gamma * x0 * y0 + self.f/self.gamma * b0 * z0 + y[1])
+            z1 = 0.001*(a0 * x0 - b0 * z0 + self.kappa * 1000 * np.log( abs( (1-z0)*z0p/(z0*(1-z0p)) )) + y[2])
+            a1 = 0.001*(-self.q/self.alfa * a0 * y0 - 1/self.alfa * a0 * x0 + 1/self.alfa * x0 * x0 + y[3])
+            b1 = 0.001*(-1/self.beta * b0 * z0 + y[4])
+            x2 = 0.001*(self.q/self.epsilon * a0p * y0p - 1/self.epsilon * x0p * y0p + 1/self.epsilon * a0p * x0p - 1/self.epsilon * x0p * x0p + y[5])
+            y2 = 0.001*(-self.q/self.gamma * a0p * y0p - 1/self.gamma * x0p * y0p + self.f/self.gamma * b0p * z0p + y[6])
+            z2 = 0.001*(a0p * x0p - b0p * z0p - self.kappa * 1000 * np.log( abs( (1-z0)*z0p/(z0*(1-z0p)) )) + y[7])
+            a2 = 0.001*(-self.q/self.alfa * a0p * y0p - 1/self.alfa * a0p * x0p + 1/self.alfa * x0p * x0p + y[8])
+            b2 = 0.001*(-1/self.betap * b0p * z0p + y[9])
             # Add input vector
             x_n1 = [input_test] @ self.W_in + [x1, y1, z1, a1, b1, x2, y2, z2, a2, b2]
             self.test_reservoir_nodes[data_i + 1,:] = x_n1
